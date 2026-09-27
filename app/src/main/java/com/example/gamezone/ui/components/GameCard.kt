@@ -34,7 +34,11 @@ import com.example.gamezone.ui.theme.PremiumGold
 fun GameCard(
     game: Game,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // Se muestra cuando el juego es exclusivo Pro y quien lo esta viendo no
+    // tiene acceso activo a Premium (invitado, cuenta Free, o Pro sin sesion).
+    // Por defecto false para no afectar a las pantallas que no lo necesitan.
+    isLocked: Boolean = false
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -105,6 +109,10 @@ fun GameCard(
                             color = Color.White
                         )
                     }
+                }
+
+                if (isLocked) {
+                    PremiumBadge(modifier = Modifier.padding(8.dp).align(Alignment.TopStart))
                 }
             }
             

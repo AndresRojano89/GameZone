@@ -120,7 +120,8 @@ fun GameZoneApp() {
                 ExploreScreen(
                     onGameClick = { gameId ->
                         navController.navigate(Screen.Details.createRoute(gameId))
-                    }
+                    },
+                    appViewModel = appViewModel
                 )
             }
             composable(Screen.Library.route) {
@@ -173,6 +174,9 @@ fun GameZoneApp() {
                     },
                     onLoginClick = {
                         navController.navigate(Screen.Login.route)
+                    },
+                    onGameClick = { relatedId ->
+                        navController.navigate(Screen.Details.createRoute(relatedId))
                     },
                     viewModel = appViewModel
                 )

@@ -22,16 +22,23 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.gamezone.ui.components.GameCard
 import com.example.gamezone.ui.theme.PrimaryNeon
+import com.example.gamezone.ui.viewmodel.AppViewModel
 import com.example.gamezone.ui.viewmodel.ExploreViewModel
 
 @Composable
 fun ExploreScreen(
     onGameClick: (Int) -> Unit,
+    appViewModel: AppViewModel,
     viewModel: ExploreViewModel = viewModel()
 ) {
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
     val games by viewModel.filteredGames.collectAsState()
+    // Explorar filtra por genero, no por categoria, asi que sin esta bandera
+    // los juegos exclusivos de la Coleccion Retro eran completamente visibles
+    // y accesibles para invitados/cuentas Free, sin ninguna senal de que
+    // requieren GameZone Pro (inconsistente con el bloqueo que ya existe en Home).
+    val hasActivePremiumAccess by appViewModel.hasActivePremiumAccess.collectAsState()
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -122,7 +129,8 @@ fun ExploreScreen(
                         GameCard(
                             game = game,
                             onClick = { onGameClick(game.id) },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            isLocked = game.isPremium && !hasActivePremiumAccess
                         )
                     }
                 }

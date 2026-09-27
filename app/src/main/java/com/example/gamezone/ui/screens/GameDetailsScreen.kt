@@ -5,6 +5,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
 import com.example.gamezone.data.repository.MockDataProvider
+import com.example.gamezone.ui.components.GameCard
 import com.example.gamezone.ui.theme.PremiumGold
 import com.example.gamezone.ui.theme.PrimaryNeon
 import com.example.gamezone.ui.viewmodel.AppViewModel
@@ -35,6 +38,7 @@ fun GameDetailsScreen(
     onBackClick: () -> Unit,
     onCreateProfileClick: () -> Unit,
     onLoginClick: () -> Unit,
+    onGameClick: (Int) -> Unit,
     viewModel: AppViewModel
 ) {
     val game = MockDataProvider.games.find { it.id == gameId }
@@ -42,11 +46,20 @@ fun GameDetailsScreen(
     val isLoggedIn by viewModel.isLoggedIn.collectAsState()
     val hasProfile by viewModel.hasProfile.collectAsState()
     val userRatings by viewModel.userRatings.collectAsState()
-    
+    val hasActivePremiumAccess by viewModel.hasActivePremiumAccess.collectAsState()
+
     // Sin sesión activa no se muestra actividad personal (biblioteca/valoración)
     // de una cuenta anterior en este mismo dispositivo.
     val isInLibrary = isLoggedIn && libraryIds.contains(gameId)
     val userRating = if (isLoggedIn) userRatings[gameId] ?: 0 else 0
+
+    // Juegos del mismo genero para la seccion "Tambien te puede interesar".
+    // Details antes era un callejon sin salida: al terminar de leer, la unica
+    // accion era volver atras. Se calcula aqui mismo, sin tocar MockDataProvider.
+    val relatedGames = remember(gameId, game?.genre) {
+        if (game == null) emptyList()
+        else MockDataProvider.games.filter { it.id != game.id && it.genre == game.genre }.take(10)
+    }
     
     var isVisible by remember { mutableStateOf(false) }
     var showGuestDialog by remember { mutableStateOf(false) }
@@ -185,9 +198,34 @@ fun GameDetailsScreen(
                     
                     Text("Plataformas", style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold)
                     Text(text = game.platforms.joinToString(", "), style = MaterialTheme.typography.bodyMedium, color = Color.Gray, modifier = Modifier.padding(top = 8.dp))
-
-                    Spacer(modifier = Modifier.height(60.dp))
                 }
+
+                if (relatedGames.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(32.dp))
+                    Text(
+                        text = "También te puede interesar",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 20.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        items(relatedGames) { related ->
+                            GameCard(
+                                game = related,
+                                onClick = { onGameClick(related.id) },
+                                modifier = Modifier.width(140.dp),
+                                isLocked = related.isPremium && !hasActivePremiumAccess
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(48.dp))
             }
         }
     }

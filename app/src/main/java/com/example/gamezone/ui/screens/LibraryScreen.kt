@@ -35,6 +35,10 @@ fun LibraryScreen(
     val isLoggedIn by viewModel.isLoggedIn.collectAsState()
     val hasProfile by viewModel.hasProfile.collectAsState()
     val libraryIds by viewModel.libraryGameIds.collectAsState()
+    // Un juego guardado mientras la cuenta era Pro sigue apareciendo en la
+    // Biblioteca si Premium vence despues: se marca con la misma insignia que
+    // en Explorar para mantener la senal consistente en todo el catalogo.
+    val hasActivePremiumAccess by viewModel.hasActivePremiumAccess.collectAsState()
     val savedGames = MockDataProvider.games.filter { libraryIds.contains(it.id) }
 
     Surface(
@@ -79,7 +83,8 @@ fun LibraryScreen(
                         GameCard(
                             game = game,
                             onClick = { onGameClick(game.id) },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            isLocked = game.isPremium && !hasActivePremiumAccess
                         )
                     }
                 }

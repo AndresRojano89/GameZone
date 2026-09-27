@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -115,7 +116,20 @@ fun ProfileScreen(
                         )
                     }
                 }
-                
+
+                // 3b. Ratings: los datos de valoracion ya existian (se usan para
+                // el contador de "Valorados" y las estrellas en Detalles), pero
+                // nunca se mostraban como una lista navegable. Aqui se aprovechan
+                // para dar al perfil un "top personal" de sus propios juegos.
+                if (isLoggedIn && userRatings.isNotEmpty()) {
+                    item {
+                        RatedGamesSection(
+                            ratings = userRatings,
+                            onGameClick = onGameClick
+                        )
+                    }
+                }
+
                 // 4. Premium CTA
                 item { 
                     AnimatedContent(targetState = isPremium, label = "premium_card") { premium ->
@@ -312,6 +326,64 @@ fun ActivitySection(title: String, gameIds: List<Int>, onGameClick: (Int) -> Uni
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
                         )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun RatedGamesSection(ratings: Map<Int, Int>, onGameClick: (Int) -> Unit) {
+    // De mayor a menor valoracion: funciona como un "top personal" del usuario.
+    val sortedEntries = remember(ratings) { ratings.entries.sortedByDescending { it.value } }
+
+    Column(modifier = Modifier.padding(vertical = 16.dp)) {
+        Text(
+            text = "Tus Valoraciones",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = Color.Gray,
+            modifier = Modifier.padding(start = 16.dp, bottom = 12.dp)
+        )
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(sortedEntries) { (gameId, rating) ->
+                val game = MockDataProvider.games.find { it.id == gameId }
+                game?.let {
+                    Column(
+                        modifier = Modifier
+                            .width(90.dp)
+                            .clickable { onGameClick(it.id) }
+                    ) {
+                        Card(
+                            modifier = Modifier
+                                .size(width = 90.dp, height = 110.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                        ) {
+                            AsyncImage(
+                                model = it.imageUrl,
+                                contentDescription = it.title,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            repeat(5) { index ->
+                                Icon(
+                                    imageVector = if (index < rating) Icons.Default.Star else Icons.Outlined.Star,
+                                    contentDescription = null,
+                                    tint = if (index < rating) PrimaryNeon else Color.Gray.copy(alpha = 0.4f),
+                                    modifier = Modifier.size(11.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
