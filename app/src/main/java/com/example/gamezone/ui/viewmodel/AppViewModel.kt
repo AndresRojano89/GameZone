@@ -67,6 +67,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     init {
+        // Migra (si hace falta) la cuenta activa de una posible instalacion
+        // anterior a este esquema de multiples cuentas, sin borrar ni resetear
+        // nada. Los Flows de arriba ya funcionan igual aunque esto tarde un
+        // instante, porque leen los datos legacy directamente mientras la
+        // cuenta no aparezca todavia en el registro de cuentas conocidas.
+        viewModelScope.launch {
+            userPreferences.migrateActiveAccountIfNeeded()
+        }
+
         // Si una cancelacion pendiente ya supero su fecha de renovacion simulada,
         // se finaliza al abrir la app: se retiran los beneficios definitivamente.
         viewModelScope.launch {

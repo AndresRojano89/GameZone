@@ -168,11 +168,15 @@ fun CreateProfileScreen(
 
             OutlinedTextField(
                 value = name,
-                onValueChange = { if (it.length <= maxNameLength) name = it },
+                onValueChange = { if (!isEditMode && it.length <= maxNameLength) name = it },
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Nombre de usuario") },
                 placeholder = { Text("Escribe tu nombre...") },
                 singleLine = true,
+                // El nombre de usuario identifica la cuenta y separa sus datos
+                // (biblioteca, valoraciones, Premium) del resto de cuentas del
+                // dispositivo, asi que no se puede renombrar al editar el perfil.
+                enabled = !isEditMode,
                 isError = nameError != null,
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -181,24 +185,36 @@ fun CreateProfileScreen(
                     focusedLabelColor = PrimaryNeon,
                     unfocusedLabelColor = Color.Gray,
                     focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White
+                    unfocusedTextColor = Color.White,
+                    disabledBorderColor = Color.Gray.copy(alpha = 0.4f),
+                    disabledLabelColor = Color.Gray,
+                    disabledTextColor = Color.White
                 )
             )
-            
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                if (nameError != null) {
-                    Text(nameError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
-                } else {
-                    Spacer(modifier = Modifier.width(1.dp))
-                }
+
+            if (isEditMode) {
                 Text(
-                    text = "${name.length}/$maxNameLength",
+                    text = "El nombre de usuario no se puede cambiar.",
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color.Gray
+                    color = Color.Gray,
+                    modifier = Modifier.padding(top = 4.dp).align(Alignment.Start)
                 )
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    if (nameError != null) {
+                        Text(nameError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+                    } else {
+                        Spacer(modifier = Modifier.width(1.dp))
+                    }
+                    Text(
+                        text = "${name.length}/$maxNameLength",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.Gray
+                    )
+                }
             }
 
             if (!isEditMode) {

@@ -75,6 +75,10 @@ fun PremiumScreen(
     var isVisible by remember { mutableStateOf(false) }
     var showLoginRequiredDialog by remember { mutableStateOf(false) }
     var showCancelDialog by remember { mutableStateOf(false) }
+    // Confirmacion previa a reactivar una suscripcion cancelada/en periodo de
+    // gracia: el boton "Reactivar Suscripción" de la pantalla principal ya no
+    // reactiva de inmediato, solo abre este dialogo.
+    var showReactivateDialog by remember { mutableStateOf(false) }
 
     // Estado del asistente de suscripción (null = no está suscribiéndose ahora mismo)
     var subscribeStep by remember { mutableStateOf<SubscribeStep?>(null) }
@@ -112,7 +116,7 @@ fun PremiumScreen(
                     onBackClick = onBackClick,
                     onSelectPlan = { startSubscribe(it) },
                     onManageClick = { showCancelDialog = true },
-                    onReactivateClick = { viewModel.reactivateSubscription() }
+                    onReactivateClick = { showReactivateDialog = true }
                 )
                 SubscribeStep.PAYMENT_METHOD -> PaymentMethodStep(
                     plan = selectedPlan,
@@ -238,6 +242,38 @@ fun PremiumScreen(
             dismissButton = {
                 TextButton(onClick = { showCancelDialog = false }) {
                     Text(if (isPending) "Cerrar" else "Mantener Pro", color = Color.Gray)
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            titleContentColor = Color.White,
+            textContentColor = Color.LightGray
+        )
+    }
+
+    if (showReactivateDialog) {
+        AlertDialog(
+            onDismissRequest = { showReactivateDialog = false },
+            title = { Text("¿Reactivar suscripción?") },
+            text = {
+                Text(
+                    "Tu suscripción GameZone Pro volverá a estar activa y se renovará " +
+                        "de nuevo automáticamente en la fecha ya programada."
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.reactivateSubscription()
+                        showReactivateDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryNeon, contentColor = Color.Black)
+                ) {
+                    Text("Reactivar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showReactivateDialog = false }) {
+                    Text("Cancelar", color = Color.Gray)
                 }
             },
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
