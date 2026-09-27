@@ -36,7 +36,18 @@ fun CreateProfileScreen(
 
     var name by remember { mutableStateOf(if (currentHasProfile) currentUsername else "") }
     var selectedAvatar by remember { mutableIntStateOf(if (currentHasProfile) currentAvatarIndex else 0) }
-    
+
+    val minNameLength = 3
+    val maxNameLength = 15
+    val trimmedName = name.trim()
+    val nameError: String? = when {
+        name.isEmpty() -> null
+        trimmedName.isEmpty() -> "El nombre no puede contener solo espacios"
+        trimmedName.length < minNameLength -> "El nombre debe tener al menos $minNameLength caracteres"
+        else -> null
+    }
+    val isNameValid = trimmedName.length in minNameLength..maxNameLength
+
     val avatarColors = listOf(
         listOf(PrimaryNeon, PrimaryVariant),
         listOf(Color(0xFF03DAC6), Color(0xFF018786)),
@@ -140,12 +151,12 @@ fun CreateProfileScreen(
 
             OutlinedTextField(
                 value = name,
-                onValueChange = { if (it.length <= 15) name = it },
+                onValueChange = { if (it.length <= maxNameLength) name = it },
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Nombre de usuario") },
                 placeholder = { Text("Escribe tu nombre...") },
                 singleLine = true,
-                isError = name.isBlank() && name.isNotEmpty(),
+                isError = nameError != null,
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = PrimaryNeon,
@@ -161,13 +172,13 @@ fun CreateProfileScreen(
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                if (name.isBlank() && name.isNotEmpty()) {
-                    Text("El nombre no puede estar vacío", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+                if (nameError != null) {
+                    Text(nameError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
                 } else {
                     Spacer(modifier = Modifier.width(1.dp))
                 }
                 Text(
-                    text = "${name.length}/15",
+                    text = "${name.length}/$maxNameLength",
                     style = MaterialTheme.typography.labelSmall,
                     color = Color.Gray
                 )
@@ -177,15 +188,15 @@ fun CreateProfileScreen(
 
             Button(
                 onClick = {
-                    if (name.isNotBlank()) {
-                        viewModel.createProfile(name.trim(), selectedAvatar)
+                    if (isNameValid) {
+                        viewModel.createProfile(trimmedName, selectedAvatar)
                         onBackClick()
                     }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                enabled = name.isNotBlank(),
+                enabled = isNameValid,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = PrimaryNeon,
                     contentColor = Color.Black

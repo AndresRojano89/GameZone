@@ -26,9 +26,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.example.gamezone.data.model.Game
 import com.example.gamezone.data.repository.MockDataProvider
 import com.example.gamezone.ui.components.PremiumBadge
 import com.example.gamezone.ui.theme.PrimaryNeon
@@ -45,6 +43,7 @@ fun ProfileScreen(
     val isPremium by viewModel.isPremium.collectAsState()
     val libraryIds by viewModel.libraryGameIds.collectAsState()
     val hasProfile by viewModel.hasProfile.collectAsState()
+    val isLoggedIn by viewModel.isLoggedIn.collectAsState()
     val username by viewModel.username.collectAsState()
     val avatarIndex by viewModel.avatarIndex.collectAsState()
     val userRatings by viewModel.userRatings.collectAsState()
@@ -81,27 +80,29 @@ fun ProfileScreen(
                 contentPadding = PaddingValues(bottom = 32.dp)
             ) {
                 // 1. Header
-                item { 
+                item {
                     ProfileHeader(
                         hasProfile = hasProfile,
+                        isLoggedIn = isLoggedIn,
                         username = username,
                         isPremium = isPremium,
                         avatarColors = avatarColors[avatarIndex.coerceIn(0, 4)],
-                        onActionClick = onCreateProfileClick
-                    ) 
+                        onActionClick = onCreateProfileClick,
+                        onLoginClick = { viewModel.login() }
+                    )
                 }
-                
+
                 // 2. Stats
                 item {
                     ProfileStatsSection(
-                        libraryCount = libraryIds.size, 
-                        ratingCount = userRatings.size,
-                        catalogCount = totalGames 
+                        libraryCount = if (isLoggedIn) libraryIds.size else 0,
+                        ratingCount = if (isLoggedIn) userRatings.size else 0,
+                        catalogCount = totalGames
                     )
                 }
 
                 // 3. Activity (Recent Library)
-                if (hasProfile && libraryIds.isNotEmpty()) {
+                if (isLoggedIn && libraryIds.isNotEmpty()) {
                     item {
                         ActivitySection(
                             title = "Mi Biblioteca Reciente",
@@ -122,6 +123,7 @@ fun ProfileScreen(
                 item {
                     ProfileSettingsSection(
                         hasProfile = hasProfile,
+                        isLoggedIn = isLoggedIn,
                         notificationsEnabled = notificationsEnabled,
                         onNotificationsToggle = { viewModel.setNotificationsEnabled(it) },
                         onAccountClick = { showAccountDialog = true },
@@ -147,10 +149,15 @@ fun ProfileScreen(
         AccountDialog(
             username = username,
             hasProfile = hasProfile,
+            isLoggedIn = isLoggedIn,
             isPremium = isPremium,
-            onLogout = { 
+            onLogout = {
                 viewModel.logout()
-                showAccountDialog = false 
+                showAccountDialog = false
+            },
+            onLogin = {
+                viewModel.login()
+                showAccountDialog = false
             },
             onEdit = {
                 showAccountDialog = false
@@ -164,10 +171,12 @@ fun ProfileScreen(
 @Composable
 fun ProfileHeader(
     hasProfile: Boolean,
+    isLoggedIn: Boolean,
     username: String,
     isPremium: Boolean,
     avatarColors: List<Color>,
-    onActionClick: () -> Unit
+    onActionClick: () -> Unit,
+    onLoginClick: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -179,20 +188,20 @@ fun ProfileHeader(
             modifier = Modifier
                 .size(100.dp)
                 .background(
-                    brush = if (hasProfile) Brush.linearGradient(avatarColors) 
-                            else Brush.linearGradient(listOf(Color.DarkGray, Color.Gray)), 
+                    brush = if (isLoggedIn) Brush.linearGradient(avatarColors)
+                            else Brush.linearGradient(listOf(Color.DarkGray, Color.Gray)),
                     shape = CircleShape
                 ),
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = if (hasProfile) Icons.Default.Person else Icons.Default.AccountCircle, 
-                contentDescription = null, 
-                modifier = Modifier.size(50.dp), 
-                tint = if (hasProfile) Color.Black else Color.Gray
+                imageVector = if (isLoggedIn) Icons.Default.Person else Icons.Default.AccountCircle,
+                contentDescription = null,
+                modifier = Modifier.size(50.dp),
+                tint = if (isLoggedIn) Color.Black else Color.Gray
             )
-            
-            if (hasProfile) {
+
+            if (isLoggedIn) {
                 IconButton(
                     onClick = onActionClick,
                     modifier = Modifier
@@ -205,29 +214,29 @@ fun ProfileHeader(
                 }
             }
         }
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         Text(
-            text = username, 
-            style = MaterialTheme.typography.headlineSmall, 
-            fontWeight = FontWeight.Bold, 
+            text = if (isLoggedIn) username else "Invitado",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
             color = Color.White
         )
-        
+
         Spacer(modifier = Modifier.height(8.dp))
-        
+
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (!hasProfile) {
+            if (!isLoggedIn) {
                 Surface(
                     color = MaterialTheme.colorScheme.surfaceVariant,
                     shape = RoundedCornerShape(8.dp),
-                    onClick = onActionClick
+                    onClick = if (hasProfile) onLoginClick else onActionClick
                 ) {
                     Text(
-                        text = "Invitado • Crear Perfil", 
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp), 
-                        style = MaterialTheme.typography.labelSmall, 
+                        text = if (hasProfile) "Cuenta guardada • Iniciar sesión" else "Invitado • Crear Perfil",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall,
                         color = PrimaryNeon
                     )
                 }
@@ -352,6 +361,7 @@ fun PremiumCallToAction(isPremium: Boolean, onClick: () -> Unit) {
 @Composable
 fun ProfileSettingsSection(
     hasProfile: Boolean,
+    isLoggedIn: Boolean,
     notificationsEnabled: Boolean,
     onNotificationsToggle: (Boolean) -> Unit,
     onAccountClick: () -> Unit,
@@ -367,11 +377,15 @@ fun ProfileSettingsSection(
             color = Color.Gray,
             modifier = Modifier.padding(vertical = 12.dp)
         )
-        
+
         SettingsItem(
-            icon = Icons.Default.AccountCircle, 
-            title = "Cuenta", 
-            value = if (hasProfile) "Gestionar" else "Crear perfil", 
+            icon = Icons.Default.AccountCircle,
+            title = "Cuenta",
+            value = when {
+                isLoggedIn -> "Gestionar"
+                hasProfile -> "Iniciar sesión"
+                else -> "Crear perfil"
+            },
             onClick = onAccountClick
         )
         
@@ -445,8 +459,10 @@ fun AboutDialog(onDismiss: () -> Unit) {
 fun AccountDialog(
     username: String,
     hasProfile: Boolean,
+    isLoggedIn: Boolean,
     isPremium: Boolean,
     onLogout: () -> Unit,
+    onLogin: () -> Unit,
     onEdit: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -455,47 +471,73 @@ fun AccountDialog(
         title = { Text("Gestión de Cuenta", fontWeight = FontWeight.Bold) },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
-                Text(text = "Usuario actual: $username", style = MaterialTheme.typography.bodyLarge, color = Color.White)
                 Text(
-                    text = if (isPremium) "Suscripción: GameZone PRO" else "Suscripción: Gratuita",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (isPremium) PrimaryNeon else Color.Gray
+                    text = if (isLoggedIn) "Usuario actual: $username" else "Sesión no iniciada",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.White
                 )
-                
+                if (isLoggedIn) {
+                    Text(
+                        text = if (isPremium) "Suscripción: GameZone PRO" else "Suscripción: Gratuita",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (isPremium) PrimaryNeon else Color.Gray
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(24.dp))
-                
-                if (hasProfile) {
-                    OutlinedButton(
-                        onClick = onEdit,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
-                    ) {
-                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Editar Perfil")
+
+                when {
+                    isLoggedIn -> {
+                        OutlinedButton(
+                            onClick = onEdit,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Editar Perfil")
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Button(
+                            onClick = onLogout,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFCF6679), contentColor = Color.White)
+                        ) {
+                            Icon(Icons.Default.ExitToApp, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Cerrar Sesión")
+                        }
                     }
-                    
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    Button(
-                        onClick = onLogout,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFCF6679), contentColor = Color.White)
-                    ) {
-                        Icon(Icons.Default.ExitToApp, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Cerrar Sesión")
+                    hasProfile -> {
+                        Text(
+                            text = "Encontramos una cuenta local guardada en este dispositivo (\"$username\"). Puedes volver a entrar sin perder tu biblioteca ni tus valoraciones.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.Gray
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(
+                            onClick = onLogin,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryNeon, contentColor = Color.Black)
+                        ) {
+                            Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Iniciar Sesión")
+                        }
                     }
-                } else {
-                    Button(
-                        onClick = onEdit,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryNeon, contentColor = Color.Black)
-                    ) {
-                        Text("Crear Perfil Ahora")
+                    else -> {
+                        Button(
+                            onClick = onEdit,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryNeon, contentColor = Color.Black)
+                        ) {
+                            Text("Crear Perfil Ahora")
+                        }
                     }
                 }
-                
+
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = "Nota: El cierre de sesión te mantendrá como visitante pero conservará tus datos locales.",

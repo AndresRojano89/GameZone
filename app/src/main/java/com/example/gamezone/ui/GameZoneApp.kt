@@ -131,6 +131,9 @@ fun GameZoneApp() {
                     onExploreClick = {
                         navigateToTopLevel(Screen.Explore.route)
                     },
+                    onCreateProfileClick = {
+                        navController.navigate(Screen.CreateProfile.route)
+                    },
                     viewModel = appViewModel
                 )
             }
@@ -173,6 +176,9 @@ fun GameZoneApp() {
                 PremiumScreen(
                     onBackClick = {
                         navController.popBackStack()
+                    },
+                    onCreateProfileClick = {
+                        navController.navigate(Screen.CreateProfile.route)
                     },
                     viewModel = appViewModel
                 )

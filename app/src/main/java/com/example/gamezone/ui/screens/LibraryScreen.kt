@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -27,8 +28,11 @@ import com.example.gamezone.ui.viewmodel.AppViewModel
 fun LibraryScreen(
     onGameClick: (Int) -> Unit,
     onExploreClick: () -> Unit,
+    onCreateProfileClick: () -> Unit,
     viewModel: AppViewModel
 ) {
+    val isLoggedIn by viewModel.isLoggedIn.collectAsState()
+    val hasProfile by viewModel.hasProfile.collectAsState()
     val libraryIds by viewModel.libraryGameIds.collectAsState()
     val savedGames = MockDataProvider.games.filter { libraryIds.contains(it.id) }
 
@@ -46,16 +50,24 @@ fun LibraryScreen(
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
-                    text = if (savedGames.isEmpty()) "Guarda tus juegos favoritos" else "${savedGames.size} juegos guardados",
+                    text = when {
+                        !isLoggedIn -> "Inicia sesión para ver tus juegos guardados"
+                        savedGames.isEmpty() -> "Guarda tus juegos favoritos"
+                        else -> "${savedGames.size} juegos guardados"
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.Gray
                 )
             }
 
-            if (savedGames.isEmpty()) {
-                EmptyLibrary(onExploreClick)
-            } else {
-                LazyVerticalGrid(
+            when {
+                !isLoggedIn -> GuestLibraryPrompt(
+                    hasProfile = hasProfile,
+                    onLoginClick = { viewModel.login() },
+                    onCreateProfileClick = onCreateProfileClick
+                )
+                savedGames.isEmpty() -> EmptyLibrary(onExploreClick)
+                else -> LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
                     contentPadding = PaddingValues(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -71,6 +83,59 @@ fun LibraryScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun GuestLibraryPrompt(
+    hasProfile: Boolean,
+    onLoginClick: () -> Unit,
+    onCreateProfileClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.Lock,
+            contentDescription = null,
+            modifier = Modifier.size(80.dp),
+            tint = MaterialTheme.colorScheme.surfaceVariant
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            text = "La Biblioteca es una función personal",
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = if (hasProfile)
+                "Ya tienes una cuenta local en este dispositivo. Inicia sesión para recuperar tus juegos guardados."
+            else
+                "Crea una cuenta local para guardar tus juegos favoritos y llevar el control de tu progreso.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.Gray,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(32.dp))
+        Button(
+            onClick = if (hasProfile) onLoginClick else onCreateProfileClick,
+            colors = ButtonDefaults.buttonColors(containerColor = PrimaryNeon),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth(0.8f)
+        ) {
+            Text(
+                text = if (hasProfile) "Iniciar sesión" else "Crear perfil",
+                color = Color.Black,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }

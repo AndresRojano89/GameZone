@@ -38,11 +38,14 @@ fun GameDetailsScreen(
 ) {
     val game = MockDataProvider.games.find { it.id == gameId }
     val libraryIds by viewModel.libraryGameIds.collectAsState()
+    val isLoggedIn by viewModel.isLoggedIn.collectAsState()
     val hasProfile by viewModel.hasProfile.collectAsState()
     val userRatings by viewModel.userRatings.collectAsState()
     
-    val isInLibrary = libraryIds.contains(gameId)
-    val userRating = userRatings[gameId] ?: 0
+    // Sin sesión activa no se muestra actividad personal (biblioteca/valoración)
+    // de una cuenta anterior en este mismo dispositivo.
+    val isInLibrary = isLoggedIn && libraryIds.contains(gameId)
+    val userRating = if (isLoggedIn) userRatings[gameId] ?: 0 else 0
     
     var isVisible by remember { mutableStateOf(false) }
     var showGuestDialog by remember { mutableStateOf(false) }
@@ -140,7 +143,7 @@ fun GameDetailsScreen(
                     val contentColor by animateColorAsState(if (isInLibrary) Color.White else Color.Black, label = "")
 
                     Button(
-                        onClick = { if (hasProfile) viewModel.toggleLibraryGame(gameId) else showGuestDialog = true },
+                        onClick = { if (isLoggedIn) viewModel.toggleLibraryGame(gameId) else showGuestDialog = true },
                         modifier = Modifier.fillMaxWidth().height(56.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = containerColor, contentColor = contentColor),
                         shape = RoundedCornerShape(12.dp)
@@ -165,7 +168,7 @@ fun GameDetailsScreen(
                                 contentDescription = null,
                                 tint = if (userRating >= star) PremiumGold else Color.Gray.copy(alpha = 0.5f),
                                 modifier = Modifier.size(48.dp).clickable {
-                                    if (hasProfile) viewModel.setRating(gameId, star) else showGuestDialog = true
+                                    if (isLoggedIn) viewModel.setRating(gameId, star) else showGuestDialog = true
                                 }.padding(4.dp)
                             )
                         }
@@ -191,11 +194,22 @@ fun GameDetailsScreen(
     if (showGuestDialog) {
         AlertDialog(
             onDismissRequest = { showGuestDialog = false },
-            title = { Text("Personaliza tu GameZone") },
-            text = { Text("Crea un perfil para guardar juegos en tu biblioteca, valorarlos y conservar tus preferencias.") },
+            title = { Text(if (hasProfile) "Inicia sesión para continuar" else "Personaliza tu GameZone") },
+            text = {
+                Text(
+                    if (hasProfile) "Ya tienes una cuenta local en este dispositivo. Inicia sesión para guardar juegos en tu biblioteca y valorarlos."
+                    else "Crea un perfil para guardar juegos en tu biblioteca, valorarlos y conservar tus preferencias."
+                )
+            },
             confirmButton = {
-                Button(onClick = { showGuestDialog = false; onCreateProfileClick() }, colors = ButtonDefaults.buttonColors(containerColor = PrimaryNeon, contentColor = Color.Black)) {
-                    Text("Crear perfil")
+                Button(
+                    onClick = {
+                        showGuestDialog = false
+                        if (hasProfile) viewModel.login() else onCreateProfileClick()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryNeon, contentColor = Color.Black)
+                ) {
+                    Text(if (hasProfile) "Iniciar sesión" else "Crear perfil")
                 }
             },
             dismissButton = {

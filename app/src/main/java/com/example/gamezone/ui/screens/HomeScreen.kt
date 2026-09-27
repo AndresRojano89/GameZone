@@ -19,12 +19,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.gamezone.data.model.GameCategory
 import com.example.gamezone.data.repository.MockDataProvider
 import com.example.gamezone.ui.components.*
 import com.example.gamezone.ui.theme.PrimaryNeon
-import com.example.gamezone.ui.theme.PrimaryVariant
 import com.example.gamezone.ui.viewmodel.AppViewModel
 
 @Composable
@@ -36,6 +34,8 @@ fun HomeScreen(
     viewModel: AppViewModel
 ) {
     val isPremium by viewModel.isPremium.collectAsState()
+    val isLoggedIn by viewModel.isLoggedIn.collectAsState()
+    val username by viewModel.username.collectAsState()
     val games = MockDataProvider.games
     var isVisible by remember { mutableStateOf(false) }
 
@@ -66,6 +66,7 @@ fun HomeScreen(
                 item {
                     HomeHeader(
                         isPremium = isPremium,
+                        greetingName = if (isLoggedIn) username else "Jugador",
                         onProfileClick = onProfileClick
                     )
                 }
@@ -210,6 +211,7 @@ fun LockedRetroSection(onClick: () -> Unit) {
 @Composable
 fun HomeHeader(
     isPremium: Boolean,
+    greetingName: String,
     onProfileClick: () -> Unit
 ) {
     Row(
@@ -221,7 +223,7 @@ fun HomeHeader(
     ) {
         Column {
             Text(
-                text = "Hola, Jugador",
+                text = "Hola, $greetingName",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.Gray
             )
