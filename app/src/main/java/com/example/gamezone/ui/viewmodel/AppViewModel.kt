@@ -3,6 +3,7 @@ package com.example.gamezone.ui.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.gamezone.data.local.LoginResult
 import com.example.gamezone.data.local.PaymentMethod
 import com.example.gamezone.data.local.PremiumPlan
 import com.example.gamezone.data.local.SubscriptionStatus
@@ -53,6 +54,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val renewalDateMillis: StateFlow<Long> = userPreferences.renewalDateMillis
         .stateIn(viewModelScope, SharingStarted.Eagerly, 0L)
 
+    // Indica si la cuenta local ya tiene una contrasena configurada (falso para
+    // cuentas creadas antes del sistema de credenciales, hasta que la configuren).
+    val hasCredentials: StateFlow<Boolean> = userPreferences.hasCredentials
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    // Acceso real a los beneficios Premium: exige sesion iniciada ADEMAS de tener
+    // la suscripcion activa. Un invitado nunca debe ver Retro ni el estado de
+    // gestion de Premium, aunque la cuenta guardada en el dispositivo sea PRO.
+    val hasActivePremiumAccess: StateFlow<Boolean> = combine(isLoggedIn, isPremium) { loggedIn, premium ->
+        loggedIn && premium
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     init {
         // Si una cancelacion pendiente ya supero su fecha de renovacion simulada,
         // se finaliza al abrir la app: se retiran los beneficios definitivamente.
@@ -80,9 +93,25 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun createProfile(name: String, avatar: Int) {
+    // Crea una cuenta local nueva (usuario + contrasena + avatar) e inicia sesion.
+    fun createAccount(name: String, avatar: Int, password: String) {
         viewModelScope.launch {
-            userPreferences.setProfileInfo(name, avatar)
+            userPreferences.createAccount(name, avatar, password)
+        }
+    }
+
+    // Edita nombre/avatar de la cuenta ya autenticada, sin tocar credenciales.
+    fun updateProfile(name: String, avatar: Int) {
+        viewModelScope.launch {
+            userPreferences.updateProfile(name, avatar)
+        }
+    }
+
+    // Migracion: establece por primera vez la contrasena de una cuenta creada
+    // antes del sistema de credenciales, sin perder biblioteca/valoraciones/Premium.
+    fun setCredentials(password: String) {
+        viewModelScope.launch {
+            userPreferences.setCredentials(password)
         }
     }
 
@@ -94,10 +123,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // Reactiva la sesion de la cuenta local ya existente, sin volver a pedir datos.
-    fun login() {
+    // Intenta iniciar sesion con usuario y contrasena. NO recupera la sesion
+    // automaticamente por el simple hecho de que exista una cuenta local: solo
+    // si las credenciales introducidas son correctas.
+    fun login(username: String, password: String, onResult: (Boolean) -> Unit) {
         viewModelScope.launch {
-            userPreferences.login()
+            val result = userPreferences.attemptLogin(username, password)
+            onResult(result == LoginResult.SUCCESS)
         }
     }
 
@@ -119,7 +151,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // Activa GameZone Pro tras completar el resumen de pago (simulado y local).
     // Calcula una fecha de renovacion real: +30 dias (mensual) o +365 dias (anual).
+    // Requiere sesion iniciada: un invitado nunca puede activar Premium.
     fun subscribe(plan: PremiumPlan, method: PaymentMethod) {
+        if (!isLoggedIn.value) return
         viewModelScope.launch {
             val calendar = Calendar.getInstance()
             when (plan) {
@@ -132,14 +166,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // El usuario solicita cancelar: conserva los beneficios hasta la fecha de renovacion.
+    // Requiere sesion iniciada.
     fun requestCancellation() {
+        if (!isLoggedIn.value) return
         viewModelScope.launch {
             userPreferences.requestCancellation()
         }
     }
 
     // Deshace una cancelacion pendiente mientras el plan sigue vigente.
+    // Requiere sesion iniciada.
     fun reactivateSubscription() {
+        if (!isLoggedIn.value) return
         viewModelScope.launch {
             userPreferences.reactivateSubscription()
         }

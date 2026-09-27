@@ -134,6 +134,9 @@ fun GameZoneApp() {
                     onCreateProfileClick = {
                         navController.navigate(Screen.CreateProfile.route)
                     },
+                    onLoginClick = {
+                        navController.navigate(Screen.Login.route)
+                    },
                     viewModel = appViewModel
                 )
             }
@@ -144,6 +147,9 @@ fun GameZoneApp() {
                     },
                     onCreateProfileClick = {
                         navController.navigate(Screen.CreateProfile.route)
+                    },
+                    onLoginClick = {
+                        navController.navigate(Screen.Login.route)
                     },
                     onGameClick = { gameId ->
                         navController.navigate(Screen.Details.createRoute(gameId))
@@ -165,6 +171,9 @@ fun GameZoneApp() {
                     onCreateProfileClick = {
                         navController.navigate(Screen.CreateProfile.route)
                     },
+                    onLoginClick = {
+                        navController.navigate(Screen.Login.route)
+                    },
                     viewModel = appViewModel
                 )
             }
@@ -180,12 +189,26 @@ fun GameZoneApp() {
                     onCreateProfileClick = {
                         navController.navigate(Screen.CreateProfile.route)
                     },
+                    onLoginClick = {
+                        navController.navigate(Screen.Login.route)
+                    },
                     viewModel = appViewModel
                 )
             }
             composable(Screen.CreateProfile.route) {
                 CreateProfileScreen(
                     onBackClick = {
+                        navController.popBackStack()
+                    },
+                    viewModel = appViewModel
+                )
+            }
+            composable(Screen.Login.route) {
+                LoginScreen(
+                    onBackClick = {
+                        navController.popBackStack()
+                    },
+                    onLoginSuccess = {
                         navController.popBackStack()
                     },
                     viewModel = appViewModel

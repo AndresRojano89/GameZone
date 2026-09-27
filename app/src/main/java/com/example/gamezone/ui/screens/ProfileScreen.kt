@@ -37,10 +37,14 @@ import com.example.gamezone.ui.viewmodel.AppViewModel
 fun ProfileScreen(
     onGoToPremiumClick: () -> Unit,
     onCreateProfileClick: () -> Unit,
+    onLoginClick: () -> Unit,
     onGameClick: (Int) -> Unit,
     viewModel: AppViewModel
 ) {
-    val isPremium by viewModel.isPremium.collectAsState()
+    // Acceso real a beneficios Premium: exige sesion iniciada ademas de la
+    // suscripcion, para que un invitado no vea el estado PRO de una cuenta
+    // guardada en este dispositivo mientras no haya iniciado sesion.
+    val isPremium by viewModel.hasActivePremiumAccess.collectAsState()
     val libraryIds by viewModel.libraryGameIds.collectAsState()
     val hasProfile by viewModel.hasProfile.collectAsState()
     val isLoggedIn by viewModel.isLoggedIn.collectAsState()
@@ -88,7 +92,7 @@ fun ProfileScreen(
                         isPremium = isPremium,
                         avatarColors = avatarColors[avatarIndex.coerceIn(0, 4)],
                         onActionClick = onCreateProfileClick,
-                        onLoginClick = { viewModel.login() }
+                        onLoginClick = onLoginClick
                     )
                 }
 
@@ -156,8 +160,8 @@ fun ProfileScreen(
                 showAccountDialog = false
             },
             onLogin = {
-                viewModel.login()
                 showAccountDialog = false
+                onLoginClick()
             },
             onEdit = {
                 showAccountDialog = false

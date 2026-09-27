@@ -14,6 +14,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector?
     object Library : Screen("library", "Biblioteca", Icons.Default.Favorite)
     object Profile : Screen("profile", "Perfil", Icons.Default.Person)
     object CreateProfile : Screen("create_profile", "Crear Perfil", null)
+    object Login : Screen("login", "Iniciar Sesión", null)
     object Premium : Screen("premium", "Premium", null)
     object Details : Screen("details/{gameId}", "Detalles", null) {
         fun createRoute(gameId: Int) = "details/$gameId"

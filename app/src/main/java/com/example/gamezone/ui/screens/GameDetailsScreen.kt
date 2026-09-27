@@ -34,6 +34,7 @@ fun GameDetailsScreen(
     gameId: Int,
     onBackClick: () -> Unit,
     onCreateProfileClick: () -> Unit,
+    onLoginClick: () -> Unit,
     viewModel: AppViewModel
 ) {
     val game = MockDataProvider.games.find { it.id == gameId }
@@ -205,7 +206,7 @@ fun GameDetailsScreen(
                 Button(
                     onClick = {
                         showGuestDialog = false
-                        if (hasProfile) viewModel.login() else onCreateProfileClick()
+                        if (hasProfile) onLoginClick() else onCreateProfileClick()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = PrimaryNeon, contentColor = Color.Black)
                 ) {

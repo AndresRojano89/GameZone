@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.gamezone.ui.theme.PrimaryNeon
 import com.example.gamezone.ui.theme.PrimaryVariant
@@ -30,15 +31,23 @@ fun CreateProfileScreen(
     onBackClick: () -> Unit,
     viewModel: AppViewModel
 ) {
-    val currentHasProfile by viewModel.hasProfile.collectAsState()
     val currentUsername by viewModel.username.collectAsState()
     val currentAvatarIndex by viewModel.avatarIndex.collectAsState()
+    val isLoggedIn by viewModel.isLoggedIn.collectAsState()
 
-    var name by remember { mutableStateOf(if (currentHasProfile) currentUsername else "") }
-    var selectedAvatar by remember { mutableIntStateOf(if (currentHasProfile) currentAvatarIndex else 0) }
+    // Solo se edita nombre/avatar cuando ya hay una sesion iniciada. Si no hay
+    // sesion, esta pantalla siempre crea una cuenta local nueva (con contrasena).
+    val isEditMode = isLoggedIn
+
+    var name by remember { mutableStateOf(if (isEditMode) currentUsername else "") }
+    var selectedAvatar by remember { mutableIntStateOf(if (isEditMode) currentAvatarIndex else 0) }
+    var password by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var attemptedSubmit by remember { mutableStateOf(false) }
 
     val minNameLength = 3
     val maxNameLength = 15
+    val minPasswordLength = 4
     val trimmedName = name.trim()
     val nameError: String? = when {
         name.isEmpty() -> null
@@ -47,6 +56,9 @@ fun CreateProfileScreen(
         else -> null
     }
     val isNameValid = trimmedName.length in minNameLength..maxNameLength
+    val isPasswordValid = password.length >= minPasswordLength
+    val passwordsMatch = password == confirmPassword
+    val isFormValid = isNameValid && (isEditMode || (isPasswordValid && passwordsMatch))
 
     val avatarColors = listOf(
         listOf(PrimaryNeon, PrimaryVariant),
@@ -75,7 +87,7 @@ fun CreateProfileScreen(
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Atrás", tint = Color.White)
                 }
                 Text(
-                    text = if (currentHasProfile) "Editar Perfil" else "Crear Perfil Local",
+                    text = if (isEditMode) "Editar Perfil" else "Crear Perfil Local",
                     style = MaterialTheme.typography.titleLarge,
                     color = Color.White,
                     fontWeight = FontWeight.Bold
@@ -184,19 +196,79 @@ fun CreateProfileScreen(
                 )
             }
 
+            if (!isEditMode) {
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Contraseña") },
+                    singleLine = true,
+                    isError = attemptedSubmit && !isPasswordValid,
+                    visualTransformation = PasswordVisualTransformation(),
+                    supportingText = {
+                        if (attemptedSubmit && !isPasswordValid) {
+                            Text("Mínimo $minPasswordLength caracteres")
+                        }
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = PrimaryNeon,
+                        unfocusedBorderColor = Color.Gray,
+                        focusedLabelColor = PrimaryNeon,
+                        unfocusedLabelColor = Color.Gray,
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = confirmPassword,
+                    onValueChange = { confirmPassword = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Confirmar contraseña") },
+                    singleLine = true,
+                    isError = attemptedSubmit && !passwordsMatch,
+                    visualTransformation = PasswordVisualTransformation(),
+                    supportingText = {
+                        if (attemptedSubmit && !passwordsMatch) {
+                            Text("Las contraseñas no coinciden")
+                        }
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = PrimaryNeon,
+                        unfocusedBorderColor = Color.Gray,
+                        focusedLabelColor = PrimaryNeon,
+                        unfocusedLabelColor = Color.Gray,
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    )
+                )
+            }
+
             Spacer(modifier = Modifier.weight(1f))
 
             Button(
                 onClick = {
-                    if (isNameValid) {
-                        viewModel.createProfile(trimmedName, selectedAvatar)
+                    attemptedSubmit = true
+                    if (isEditMode) {
+                        if (isNameValid) {
+                            viewModel.updateProfile(trimmedName, selectedAvatar)
+                            onBackClick()
+                        }
+                    } else if (isFormValid) {
+                        viewModel.createAccount(trimmedName, selectedAvatar, password)
                         onBackClick()
                     }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                enabled = isNameValid,
+                enabled = if (isEditMode) isNameValid else isFormValid,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = PrimaryNeon,
                     contentColor = Color.Black
@@ -204,12 +276,12 @@ fun CreateProfileScreen(
                 shape = RoundedCornerShape(16.dp)
             ) {
                 Text(
-                    text = if (currentHasProfile) "Guardar Cambios" else "Comenzar mi Aventura",
+                    text = if (isEditMode) "Guardar Cambios" else "Comenzar mi Aventura",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(16.dp))
         }
     }

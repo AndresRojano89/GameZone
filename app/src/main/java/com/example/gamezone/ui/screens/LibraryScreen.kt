@@ -29,6 +29,7 @@ fun LibraryScreen(
     onGameClick: (Int) -> Unit,
     onExploreClick: () -> Unit,
     onCreateProfileClick: () -> Unit,
+    onLoginClick: () -> Unit,
     viewModel: AppViewModel
 ) {
     val isLoggedIn by viewModel.isLoggedIn.collectAsState()
@@ -63,7 +64,7 @@ fun LibraryScreen(
             when {
                 !isLoggedIn -> GuestLibraryPrompt(
                     hasProfile = hasProfile,
-                    onLoginClick = { viewModel.login() },
+                    onLoginClick = onLoginClick,
                     onCreateProfileClick = onCreateProfileClick
                 )
                 savedGames.isEmpty() -> EmptyLibrary(onExploreClick)

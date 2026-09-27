@@ -60,11 +60,14 @@ private fun formatDate(millis: Long): String {
 fun PremiumScreen(
     onBackClick: () -> Unit,
     onCreateProfileClick: () -> Unit,
+    onLoginClick: () -> Unit,
     viewModel: AppViewModel
 ) {
-    val isPremium by viewModel.isPremium.collectAsState()
+    // Acceso real a beneficios/gestion Premium: exige sesion iniciada ademas de
+    // la suscripcion. Un invitado siempre ve la pantalla como promocion (planes
+    // para suscribirse), nunca la gestion de una suscripcion de otra sesion.
+    val isPremium by viewModel.hasActivePremiumAccess.collectAsState()
     val isLoggedIn by viewModel.isLoggedIn.collectAsState()
-    val hasProfile by viewModel.hasProfile.collectAsState()
     val currentPlan by viewModel.premiumPlan.collectAsState()
     val subscriptionStatus by viewModel.subscriptionStatus.collectAsState()
     val renewalDateMillis by viewModel.renewalDateMillis.collectAsState()
@@ -152,27 +155,38 @@ fun PremiumScreen(
     if (showLoginRequiredDialog) {
         AlertDialog(
             onDismissRequest = { showLoginRequiredDialog = false },
-            title = { Text(if (hasProfile) "Inicia sesión para continuar" else "Crea una cuenta para continuar") },
+            title = { Text("GameZone Pro requiere una cuenta") },
             text = {
-                Text(
-                    if (hasProfile) "GameZone Pro es un beneficio de cuenta. Inicia sesión con tu cuenta local para suscribirte."
-                    else "GameZone Pro es un beneficio de cuenta. Crea un perfil local para suscribirte."
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showLoginRequiredDialog = false
-                        if (hasProfile) viewModel.login() else onCreateProfileClick()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryNeon, contentColor = Color.Black)
-                ) {
-                    Text(if (hasProfile) "Iniciar sesión" else "Crear perfil")
+                Column {
+                    Text("Crea una cuenta o inicia sesión para disfrutar GameZone Pro.")
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Button(
+                        onClick = {
+                            showLoginRequiredDialog = false
+                            onCreateProfileClick()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryNeon, contentColor = Color.Black)
+                    ) {
+                        Text("Crear cuenta")
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedButton(
+                        onClick = {
+                            showLoginRequiredDialog = false
+                            onLoginClick()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                    ) {
+                        Text("Iniciar sesión")
+                    }
                 }
             },
+            confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { showLoginRequiredDialog = false }) {
-                    Text("Ahora no", color = Color.Gray)
+                    Text("Cancelar", color = Color.Gray)
                 }
             },
             containerColor = MaterialTheme.colorScheme.surfaceVariant,

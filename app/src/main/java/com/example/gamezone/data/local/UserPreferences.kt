@@ -5,9 +5,16 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import java.security.MessageDigest
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "user_prefs")
+
+/**
+ * Resultado de un intento de inicio de sesion con usuario y contrasena.
+ */
+enum class LoginResult { SUCCESS, INVALID_CREDENTIALS }
 
 /**
  * Estados posibles de la suscripcion GameZone Pro.
@@ -45,6 +52,7 @@ class UserPreferences(private val context: Context) {
         private val PAYMENT_METHOD = stringPreferencesKey("payment_method")
         private val SUBSCRIPTION_STATUS = stringPreferencesKey("subscription_status")
         private val RENEWAL_DATE_MILLIS = longPreferencesKey("renewal_date_millis")
+        private val PASSWORD_HASH = stringPreferencesKey("password_hash")
     }
 
     val isPremium: Flow<Boolean> = context.dataStore.data.map { prefs ->
@@ -113,18 +121,47 @@ class UserPreferences(private val context: Context) {
         prefs[RENEWAL_DATE_MILLIS] ?: 0L
     }
 
+    // Indica si la cuenta local ya tiene una contrasena configurada. Una cuenta
+    // creada antes de este sistema de credenciales existira con hasProfile=true
+    // pero hasCredentials=false, y debera configurar su contrasena para poder
+    // iniciar sesion de nuevo tras cerrarla.
+    val hasCredentials: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        !prefs[PASSWORD_HASH].isNullOrEmpty()
+    }
+
     suspend fun saveLibraryIds(ids: Set<Int>) {
         context.dataStore.edit { prefs ->
             prefs[LIBRARY_IDS] = ids.map { it.toString() }.toSet()
         }
     }
 
-    // Crea o edita la cuenta local. Al crearla por primera vez tambien inicia sesion.
-    suspend fun setProfileInfo(name: String, avatar: Int) {
+    // Crea una cuenta local nueva (usuario + contrasena + avatar) e inicia sesion
+    // de inmediato. Unica forma de "registro": todo permanece local, sin backend.
+    suspend fun createAccount(name: String, avatar: Int, password: String) {
         context.dataStore.edit { prefs ->
             prefs[USERNAME] = name
             prefs[AVATAR_INDEX] = avatar
             prefs[HAS_PROFILE] = true
+            prefs[PASSWORD_HASH] = hashPassword(password)
+            prefs[IS_LOGGED_IN] = true
+        }
+    }
+
+    // Edita nombre/avatar de la cuenta ya autenticada. No toca credenciales ni
+    // el estado de la sesion.
+    suspend fun updateProfile(name: String, avatar: Int) {
+        context.dataStore.edit { prefs ->
+            prefs[USERNAME] = name
+            prefs[AVATAR_INDEX] = avatar
+        }
+    }
+
+    // Migracion segura para cuentas creadas antes del sistema de credenciales:
+    // establece una contrasena por primera vez sin tocar biblioteca, valoraciones
+    // ni el estado de GameZone Pro, e inicia sesion.
+    suspend fun setCredentials(password: String) {
+        context.dataStore.edit { prefs ->
+            prefs[PASSWORD_HASH] = hashPassword(password)
             prefs[IS_LOGGED_IN] = true
         }
     }
@@ -137,11 +174,26 @@ class UserPreferences(private val context: Context) {
         }
     }
 
-    // Vuelve a activar la sesion de la cuenta local existente, sin pedir datos de nuevo.
-    suspend fun login() {
-        context.dataStore.edit { prefs ->
-            prefs[IS_LOGGED_IN] = true
+    // Valida usuario y contrasena contra la cuenta local guardada. NO inicia
+    // sesion automaticamente por el simple hecho de que exista un perfil: solo
+    // si las credenciales introducidas coinciden.
+    suspend fun attemptLogin(username: String, password: String): LoginResult {
+        val prefs = context.dataStore.data.first()
+        val storedUsername = prefs[USERNAME] ?: ""
+        val storedHash = prefs[PASSWORD_HASH] ?: ""
+        val inputHash = hashPassword(password)
+
+        return if (storedHash.isNotEmpty() && username == storedUsername && inputHash == storedHash) {
+            context.dataStore.edit { it[IS_LOGGED_IN] = true }
+            LoginResult.SUCCESS
+        } else {
+            LoginResult.INVALID_CREDENTIALS
         }
+    }
+
+    private fun hashPassword(password: String): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(password.toByteArray())
+        return digest.joinToString("") { "%02x".format(it) }
     }
 
     suspend fun saveRating(gameId: Int, rating: Int) {

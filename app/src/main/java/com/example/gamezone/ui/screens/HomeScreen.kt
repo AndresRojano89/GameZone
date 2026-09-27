@@ -33,7 +33,10 @@ fun HomeScreen(
     onViewAllClick: () -> Unit,
     viewModel: AppViewModel
 ) {
-    val isPremium by viewModel.isPremium.collectAsState()
+    // Acceso real a beneficios Premium: exige sesion iniciada ademas de la
+    // suscripcion, para que un invitado nunca vea la insignia PRO ni la Retro
+    // de una cuenta guardada en este dispositivo.
+    val isPremium by viewModel.hasActivePremiumAccess.collectAsState()
     val isLoggedIn by viewModel.isLoggedIn.collectAsState()
     val username by viewModel.username.collectAsState()
     val games = MockDataProvider.games
