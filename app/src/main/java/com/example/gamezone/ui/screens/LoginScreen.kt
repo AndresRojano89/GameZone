@@ -1,5 +1,6 @@
 package com.example.gamezone.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -44,6 +45,7 @@ private fun loginFieldColors() = OutlinedTextFieldDefaults.colors(
 fun LoginScreen(
     onBackClick: () -> Unit,
     onLoginSuccess: () -> Unit,
+    onCreateAccountClick: () -> Unit,
     viewModel: AppViewModel
 ) {
     val hasCredentials by viewModel.hasCredentials.collectAsState()
@@ -86,6 +88,30 @@ fun LoginScreen(
                         viewModel.setCredentials(password)
                         onLoginSuccess()
                     }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Toda pantalla de login necesita una salida hacia crear cuenta:
+            // antes no existia ninguna forma visible de llegar a CreateProfile
+            // desde aqui, dejando a un usuario nuevo sin salida salvo "Atrás".
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "¿No tienes una cuenta?",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.Gray
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "Crear cuenta",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = PrimaryNeon,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable { onCreateAccountClick() }
                 )
             }
         }

@@ -200,9 +200,21 @@ fun GameZoneApp() {
                 )
             }
             composable(Screen.CreateProfile.route) {
+                // Si se llegó aquí desde Login (vía "Crear cuenta"), al guardar
+                // con éxito se salta también Login en el back stack, para no
+                // devolver al usuario recién registrado a la pantalla de login.
+                // Cancelar (flecha "Atrás") sigue regresando a Login normalmente.
+                val cameFromLogin = navController.previousBackStackEntry?.destination?.route == Screen.Login.route
                 CreateProfileScreen(
                     onBackClick = {
                         navController.popBackStack()
+                    },
+                    onAccountSaved = {
+                        if (cameFromLogin) {
+                            navController.popBackStack(Screen.Login.route, inclusive = true)
+                        } else {
+                            navController.popBackStack()
+                        }
                     },
                     viewModel = appViewModel
                 )
@@ -214,6 +226,9 @@ fun GameZoneApp() {
                     },
                     onLoginSuccess = {
                         navController.popBackStack()
+                    },
+                    onCreateAccountClick = {
+                        navController.navigate(Screen.CreateProfile.route)
                     },
                     viewModel = appViewModel
                 )

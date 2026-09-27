@@ -29,6 +29,11 @@ import com.example.gamezone.ui.viewmodel.AppViewModel
 @Composable
 fun CreateProfileScreen(
     onBackClick: () -> Unit,
+    // Se dispara solo al guardar con éxito (crear cuenta o editar perfil).
+    // Por defecto es igual a onBackClick, así que ningún llamador existente
+    // cambia de comportamiento; solo el flujo Login -> Crear cuenta necesita
+    // saltar la pantalla de Login al terminar, en vez de volver a mostrarla.
+    onAccountSaved: () -> Unit = onBackClick,
     viewModel: AppViewModel
 ) {
     val currentUsername by viewModel.username.collectAsState()
@@ -258,11 +263,11 @@ fun CreateProfileScreen(
                     if (isEditMode) {
                         if (isNameValid) {
                             viewModel.updateProfile(trimmedName, selectedAvatar)
-                            onBackClick()
+                            onAccountSaved()
                         }
                     } else if (isFormValid) {
                         viewModel.createAccount(trimmedName, selectedAvatar, password)
-                        onBackClick()
+                        onAccountSaved()
                     }
                 },
                 modifier = Modifier
