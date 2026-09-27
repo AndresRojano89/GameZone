@@ -122,15 +122,14 @@ fun GuestLibraryPrompt(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = if (hasProfile)
-                "Ya tienes una cuenta local en este dispositivo. Inicia sesión para recuperar tus juegos guardados."
-            else
-                "Crea una cuenta local para guardar tus juegos favoritos y llevar el control de tu progreso.",
+            text = "Inicia sesión o crea una cuenta local para guardar tus juegos favoritos y llevar el control de tu progreso.",
             style = MaterialTheme.typography.bodyMedium,
             color = Color.Gray,
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(32.dp))
+        // Si ya hay alguna cuenta en el dispositivo se prioriza "Iniciar sesion",
+        // pero siempre se ofrecen ambas vias y nunca se nombra ninguna cuenta.
         Button(
             onClick = if (hasProfile) onLoginClick else onCreateProfileClick,
             colors = ButtonDefaults.buttonColors(containerColor = PrimaryNeon),
@@ -138,10 +137,19 @@ fun GuestLibraryPrompt(
             modifier = Modifier.fillMaxWidth(0.8f)
         ) {
             Text(
-                text = if (hasProfile) "Iniciar sesión" else "Crear perfil",
+                text = if (hasProfile) "Iniciar sesión" else "Crear cuenta",
                 color = Color.Black,
                 fontWeight = FontWeight.Bold
             )
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        OutlinedButton(
+            onClick = if (hasProfile) onCreateProfileClick else onLoginClick,
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+            modifier = Modifier.fillMaxWidth(0.8f)
+        ) {
+            Text(text = if (hasProfile) "Crear cuenta" else "Iniciar sesión")
         }
     }
 }

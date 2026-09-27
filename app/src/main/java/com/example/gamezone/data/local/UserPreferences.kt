@@ -13,8 +13,13 @@ val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "us
 
 /**
  * Resultado de un intento de inicio de sesion con usuario y contrasena.
+ * SUCCESS: credenciales correctas, la sesion queda iniciada en esa cuenta.
+ * USER_NOT_FOUND: no existe ninguna cuenta local con ese nombre de usuario.
+ * WRONG_PASSWORD: la cuenta existe pero la contrasena no coincide.
+ * NEEDS_PASSWORD_SETUP: la cuenta existe pero se creo antes del sistema de
+ * credenciales y aun no tiene contrasena; debe configurarla para entrar.
  */
-enum class LoginResult { SUCCESS, INVALID_CREDENTIALS }
+enum class LoginResult { SUCCESS, USER_NOT_FOUND, WRONG_PASSWORD, NEEDS_PASSWORD_SETUP }
 
 /**
  * Estados posibles de la suscripcion GameZone Pro.
@@ -96,6 +101,24 @@ class UserPreferences(private val context: Context) {
 
     private fun isKnownAccount(prefs: Preferences, username: String): Boolean =
         (prefs[KNOWN_ACCOUNTS] ?: emptySet()).contains(username)
+
+    // Todas las cuentas locales del dispositivo: las registradas en el esquema
+    // por cuenta, mas la cuenta antigua (esquema de una sola cuenta) si todavia
+    // no ha sido migrada.
+    private fun allAccounts(prefs: Preferences): Set<String> {
+        val known = prefs[KNOWN_ACCOUNTS] ?: emptySet()
+        val legacy = prefs[USERNAME]
+        return if (legacy != null && prefs[HAS_PROFILE] == true && legacy !in known) known + legacy else known
+    }
+
+    // Busca una cuenta ignorando mayusculas/minusculas ("prueba123" encuentra
+    // "Prueba123") y devuelve su nombre exacto, que es el que indexa sus datos.
+    private fun findAccount(prefs: Preferences, username: String): String? =
+        allAccounts(prefs).firstOrNull { it.equals(username, ignoreCase = true) }
+
+    private fun storedPasswordHash(prefs: Preferences, account: String): String =
+        (if (isKnownAccount(prefs, account)) prefs[passwordHashKeyFor(account)]
+         else prefs[LEGACY_PASSWORD_HASH]) ?: ""
 
     // Copia (una sola vez) los datos de la cuenta creada antes de este esquema
     // de multiples cuentas hacia sus propias claves namespaced, identificadas
@@ -214,14 +237,10 @@ class UserPreferences(private val context: Context) {
         (if (isKnownAccount(prefs, u)) prefs[renewalDateKeyFor(u)] else prefs[LEGACY_RENEWAL_DATE_MILLIS]) ?: 0L
     }
 
-    // Indica si la cuenta local activa ya tiene una contrasena configurada. Una
-    // cuenta creada antes de este sistema de credenciales existira con
-    // hasProfile=true pero hasCredentials=false, y debera configurar su
-    // contrasena para poder iniciar sesion de nuevo tras cerrarla.
-    val hasCredentials: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        val u = prefs[USERNAME] ?: return@map false
-        val hash = if (isKnownAccount(prefs, u)) prefs[passwordHashKeyFor(u)] else prefs[LEGACY_PASSWORD_HASH]
-        !hash.isNullOrEmpty()
+    // Nombres de todas las cuentas locales del dispositivo. Se usa al crear
+    // una cuenta para impedir nombres de usuario duplicados.
+    val registeredUsernames: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+        allAccounts(prefs)
     }
 
     suspend fun saveLibraryIds(ids: Set<Int>) {
@@ -237,8 +256,17 @@ class UserPreferences(private val context: Context) {
     // pasar por la migracion legacy) para que empiece siempre vacia: sin
     // Premium, sin biblioteca y sin valoraciones, sin importar los datos que
     // tenga cualquier otra cuenta guardada en este dispositivo.
-    suspend fun createAccount(name: String, avatar: Int, password: String) {
+    // Devuelve false (sin tocar nada) si ya existe una cuenta con ese nombre.
+    suspend fun createAccount(name: String, avatar: Int, password: String): Boolean {
+        var created = false
         context.dataStore.edit { prefs ->
+            if (findAccount(prefs, name) != null) return@edit
+
+            // Si la cuenta activa hasta ahora es una cuenta antigua aun sin
+            // migrar, se migra antes de mover el puntero: sus datos legacy solo
+            // son alcanzables mientras USERNAME apunte a ella.
+            prefs[USERNAME]?.let { migrateLegacyIfNeeded(prefs, it) }
+
             val known = prefs[KNOWN_ACCOUNTS] ?: emptySet()
             prefs[KNOWN_ACCOUNTS] = known + name
 
@@ -247,7 +275,9 @@ class UserPreferences(private val context: Context) {
             prefs[IS_LOGGED_IN] = true
             prefs[avatarKeyFor(name)] = avatar
             prefs[passwordHashKeyFor(name)] = hashPassword(password)
+            created = true
         }
+        return created
     }
 
     // Edita el avatar de la cuenta ya autenticada. El nombre de usuario no se
@@ -263,15 +293,22 @@ class UserPreferences(private val context: Context) {
     }
 
     // Migracion segura para cuentas creadas antes del sistema de credenciales:
-    // establece una contrasena por primera vez sin tocar biblioteca, valoraciones
-    // ni el estado de GameZone Pro, e inicia sesion.
-    suspend fun setCredentials(password: String) {
+    // establece una contrasena por primera vez para la cuenta indicada (que el
+    // usuario escribio en el formulario de login) sin tocar biblioteca,
+    // valoraciones ni el estado de GameZone Pro, e inicia sesion en ella.
+    // Solo actua si la cuenta existe y todavia no tiene contrasena.
+    suspend fun setCredentials(username: String, password: String): Boolean {
+        var done = false
         context.dataStore.edit { prefs ->
-            val u = prefs[USERNAME] ?: return@edit
-            migrateLegacyIfNeeded(prefs, u)
-            prefs[passwordHashKeyFor(u)] = hashPassword(password)
+            val account = findAccount(prefs, username) ?: return@edit
+            if (storedPasswordHash(prefs, account).isNotEmpty()) return@edit
+            migrateLegacyIfNeeded(prefs, account)
+            prefs[passwordHashKeyFor(account)] = hashPassword(password)
+            prefs[USERNAME] = account
             prefs[IS_LOGGED_IN] = true
+            done = true
         }
+        return done
     }
 
     // Cierra sesion SIN borrar la cuenta ni ninguno de sus datos (biblioteca,
@@ -292,24 +329,20 @@ class UserPreferences(private val context: Context) {
     // exista un perfil: solo si las credenciales introducidas coinciden.
     suspend fun attemptLogin(username: String, password: String): LoginResult {
         val prefs = context.dataStore.data.first()
-        val known = prefs[KNOWN_ACCOUNTS] ?: emptySet()
-        val inputHash = hashPassword(password)
+        val account = findAccount(prefs, username) ?: return LoginResult.USER_NOT_FOUND
+        val storedHash = storedPasswordHash(prefs, account)
 
-        val storedHash = when {
-            username in known -> prefs[passwordHashKeyFor(username)] ?: ""
-            prefs[USERNAME] == username -> prefs[LEGACY_PASSWORD_HASH] ?: ""
-            else -> ""
-        }
-
-        return if (storedHash.isNotEmpty() && inputHash == storedHash) {
-            context.dataStore.edit { editPrefs ->
-                migrateLegacyIfNeeded(editPrefs, username)
-                editPrefs[USERNAME] = username
-                editPrefs[IS_LOGGED_IN] = true
+        return when {
+            storedHash.isEmpty() -> LoginResult.NEEDS_PASSWORD_SETUP
+            hashPassword(password) != storedHash -> LoginResult.WRONG_PASSWORD
+            else -> {
+                context.dataStore.edit { editPrefs ->
+                    migrateLegacyIfNeeded(editPrefs, account)
+                    editPrefs[USERNAME] = account
+                    editPrefs[IS_LOGGED_IN] = true
+                }
+                LoginResult.SUCCESS
             }
-            LoginResult.SUCCESS
-        } else {
-            LoginResult.INVALID_CREDENTIALS
         }
     }
 

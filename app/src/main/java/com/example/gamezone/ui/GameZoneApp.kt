@@ -216,6 +216,17 @@ fun GameZoneApp() {
                             navController.popBackStack()
                         }
                     },
+                    // Cuenta nueva creada (y sesión ya iniciada): se sale del
+                    // registro (y de Login si se llegó desde allí) y se lleva
+                    // al usuario a su Perfil recién creado.
+                    onAccountCreated = {
+                        if (cameFromLogin) {
+                            navController.popBackStack(Screen.Login.route, inclusive = true)
+                        } else {
+                            navController.popBackStack()
+                        }
+                        navigateToTopLevel(Screen.Profile.route)
+                    },
                     viewModel = appViewModel
                 )
             }

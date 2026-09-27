@@ -1,45 +1,41 @@
 package com.example.gamezone.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.example.gamezone.data.local.LoginResult
 import com.example.gamezone.ui.theme.PrimaryNeon
 import com.example.gamezone.ui.viewmodel.AppViewModel
 
-private val minPasswordLength = 4
-
-@Composable
-private fun loginFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor = PrimaryNeon,
-    unfocusedBorderColor = Color.Gray,
-    focusedLabelColor = PrimaryNeon,
-    unfocusedLabelColor = Color.Gray,
-    focusedTextColor = Color.White,
-    unfocusedTextColor = Color.White,
-    errorBorderColor = Color(0xFFCF6679),
-    errorLabelColor = Color(0xFFCF6679)
-)
+private val ErrorColor = Color(0xFFCF6679)
 
 /**
  * Pantalla de inicio de sesion local.
  *
- * Si la cuenta guardada en el dispositivo aun no tiene contrasena configurada
- * (cuentas creadas antes de este sistema de credenciales), se muestra primero
- * un paso de migracion para establecerla, sin perder biblioteca, valoraciones
- * ni el estado de GameZone Pro. Una vez que hay credenciales, siempre se exige
- * usuario + contrasena: nunca se recupera la sesion solo porque exista un perfil.
+ * Siempre muestra el formulario usuario + contrasena: nunca se recupera ni se
+ * sugiere ninguna cuenta por el simple hecho de que exista en el dispositivo.
+ * La cuenta se busca a partir de lo que el usuario escribe y, si las
+ * credenciales coinciden, se inicia sesion exactamente en esa cuenta.
+ *
+ * Unico caso especial: si el usuario escribe el nombre de una cuenta creada
+ * antes del sistema de credenciales (sin contrasena), se le pide crear su
+ * contrasena para esa cuenta, conservando biblioteca, valoraciones y Premium.
  */
 @Composable
 fun LoginScreen(
@@ -48,23 +44,33 @@ fun LoginScreen(
     onCreateAccountClick: () -> Unit,
     viewModel: AppViewModel
 ) {
-    val hasCredentials by viewModel.hasCredentials.collectAsState()
-    val storedUsername by viewModel.username.collectAsState()
+    // Nombre de la cuenta antigua (escrito por el usuario) que necesita
+    // configurar su contrasena; null mientras se muestra el login normal.
+    var accountNeedingPassword by rememberSaveable { mutableStateOf<String?>(null) }
+
+    BackHandler(enabled = accountNeedingPassword != null) { accountNeedingPassword = null }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
     ) {
-        Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp)
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onBackClick) {
+                IconButton(onClick = {
+                    if (accountNeedingPassword != null) accountNeedingPassword = null else onBackClick()
+                }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Atrás", tint = Color.White)
                 }
                 Text(
-                    text = if (hasCredentials) "Iniciar Sesión" else "Configura tu contraseña",
+                    text = if (accountNeedingPassword == null) "Iniciar Sesión" else "Configura tu contraseña",
                     style = MaterialTheme.typography.titleLarge,
                     color = Color.White,
                     fontWeight = FontWeight.Bold
@@ -73,29 +79,27 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            if (hasCredentials) {
+            val pendingAccount = accountNeedingPassword
+            if (pendingAccount == null) {
                 LoginForm(
-                    onSubmit = { username, password, onError ->
-                        viewModel.login(username, password) { success ->
-                            if (success) onLoginSuccess() else onError()
-                        }
-                    }
+                    viewModel = viewModel,
+                    onLoginSuccess = onLoginSuccess,
+                    onNeedsPasswordSetup = { accountNeedingPassword = it },
+                    onCreateAccountClick = onCreateAccountClick
                 )
             } else {
                 SetCredentialsForm(
-                    username = storedUsername,
+                    username = pendingAccount,
                     onSubmit = { password ->
-                        viewModel.setCredentials(password)
-                        onLoginSuccess()
+                        viewModel.setCredentials(pendingAccount, password) { ok ->
+                            if (ok) onLoginSuccess() else accountNeedingPassword = null
+                        }
                     }
                 )
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Toda pantalla de login necesita una salida hacia crear cuenta:
-            // antes no existia ninguna forma visible de llegar a CreateProfile
-            // desde aqui, dejando a un usuario nuevo sin salida salvo "Atrás".
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center
@@ -120,14 +124,20 @@ fun LoginScreen(
 
 @Composable
 private fun LoginForm(
-    onSubmit: (username: String, password: String, onError: () -> Unit) -> Unit
+    viewModel: AppViewModel,
+    onLoginSuccess: () -> Unit,
+    onNeedsPasswordSetup: (String) -> Unit,
+    onCreateAccountClick: () -> Unit
 ) {
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var attemptedSubmit by remember { mutableStateOf(false) }
-    var showError by remember { mutableStateOf(false) }
+    var username by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    var attemptedSubmit by rememberSaveable { mutableStateOf(false) }
+    var loginError by remember { mutableStateOf<LoginResult?>(null) }
+    var failedUsername by remember { mutableStateOf("") }
+    var isChecking by remember { mutableStateOf(false) }
 
-    val isValid = username.isNotBlank() && password.isNotEmpty()
+    val usernameEmpty = username.isBlank()
+    val passwordEmpty = password.isEmpty()
 
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
         Icon(
@@ -138,7 +148,7 @@ private fun LoginForm(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Ingresa tus credenciales de tu cuenta local para continuar.",
+            text = "Introduce el usuario y la contraseña de tu cuenta local para continuar.",
             style = MaterialTheme.typography.bodyMedium,
             color = Color.Gray
         )
@@ -148,36 +158,69 @@ private fun LoginForm(
 
     OutlinedTextField(
         value = username,
-        onValueChange = { username = it; showError = false },
-        label = { Text("Nombre de usuario") },
+        onValueChange = { username = it; loginError = null },
+        label = { Text("Usuario") },
         singleLine = true,
-        isError = attemptedSubmit && username.isBlank(),
+        isError = (attemptedSubmit && usernameEmpty) || loginError == LoginResult.USER_NOT_FOUND,
+        supportingText = {
+            if (attemptedSubmit && usernameEmpty) Text("Introduce tu nombre de usuario")
+        },
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        colors = loginFieldColors()
+        colors = accountFieldColors()
     )
 
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(8.dp))
 
     OutlinedTextField(
         value = password,
-        onValueChange = { password = it; showError = false },
+        onValueChange = { password = it; loginError = null },
         label = { Text("Contraseña") },
         singleLine = true,
         visualTransformation = PasswordVisualTransformation(),
-        isError = attemptedSubmit && password.isEmpty(),
+        isError = (attemptedSubmit && passwordEmpty) || loginError == LoginResult.WRONG_PASSWORD,
+        supportingText = {
+            if (attemptedSubmit && passwordEmpty) Text("Introduce tu contraseña")
+        },
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        colors = loginFieldColors()
+        colors = accountFieldColors()
     )
 
-    if (showError) {
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Usuario o contraseña incorrectos.",
-            color = Color(0xFFCF6679),
-            style = MaterialTheme.typography.labelMedium
-        )
+    when (loginError) {
+        LoginResult.USER_NOT_FOUND -> {
+            Spacer(modifier = Modifier.height(8.dp))
+            Surface(
+                color = ErrorColor.copy(alpha = 0.12f),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = "No existe ninguna cuenta con el usuario \"$failedUsername\" en este dispositivo.",
+                        color = ErrorColor,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Crear una cuenta nueva",
+                        color = PrimaryNeon,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable { onCreateAccountClick() }
+                    )
+                }
+            }
+        }
+        LoginResult.WRONG_PASSWORD -> {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "La contraseña es incorrecta. Inténtalo de nuevo.",
+                color = ErrorColor,
+                style = MaterialTheme.typography.labelMedium
+            )
+        }
+        else -> {}
     }
 
     Spacer(modifier = Modifier.height(32.dp))
@@ -185,16 +228,36 @@ private fun LoginForm(
     Button(
         onClick = {
             attemptedSubmit = true
-            if (isValid) {
-                onSubmit(username.trim(), password) { showError = true }
+            loginError = null
+            if (!usernameEmpty && !passwordEmpty) {
+                val typedUsername = username.trim()
+                isChecking = true
+                viewModel.login(typedUsername, password) { result ->
+                    isChecking = false
+                    when (result) {
+                        LoginResult.SUCCESS -> onLoginSuccess()
+                        LoginResult.NEEDS_PASSWORD_SETUP -> onNeedsPasswordSetup(typedUsername)
+                        LoginResult.WRONG_PASSWORD -> {
+                            // Se vacia la contrasena sin mostrar ademas el aviso
+                            // de "campo vacio": basta con el error de contrasena.
+                            password = ""
+                            attemptedSubmit = false
+                            loginError = result
+                        }
+                        LoginResult.USER_NOT_FOUND -> {
+                            failedUsername = typedUsername
+                            loginError = result
+                        }
+                    }
+                }
             }
         },
         modifier = Modifier.fillMaxWidth().height(56.dp),
-        enabled = isValid,
+        enabled = !isChecking,
         colors = ButtonDefaults.buttonColors(containerColor = PrimaryNeon, contentColor = Color.Black),
         shape = RoundedCornerShape(16.dp)
     ) {
-        Text("Iniciar Sesión", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text("Iniciar sesión", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -203,13 +266,12 @@ private fun SetCredentialsForm(
     username: String,
     onSubmit: (password: String) -> Unit
 ) {
-    var password by remember { mutableStateOf("") }
-    var confirmPassword by remember { mutableStateOf("") }
-    var attemptedSubmit by remember { mutableStateOf(false) }
+    var password by rememberSaveable { mutableStateOf("") }
+    var confirmPassword by rememberSaveable { mutableStateOf("") }
+    var attemptedSubmit by rememberSaveable { mutableStateOf(false) }
 
-    val passwordValid = password.length >= minPasswordLength
+    val pwdError = passwordError(password)
     val passwordsMatch = password == confirmPassword
-    val isValid = passwordValid && passwordsMatch
 
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
         Icon(
@@ -220,7 +282,7 @@ private fun SetCredentialsForm(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Encontramos tu cuenta local \"$username\". Antes de continuar, crea una contraseña para poder iniciar sesión de nuevo en el futuro. Tu biblioteca, valoraciones y GameZone Pro se conservan.",
+            text = "La cuenta \"$username\" se creó antes de que GameZone usara contraseñas. Crea una ahora para protegerla; tu biblioteca, valoraciones y GameZone Pro se conservan.",
             style = MaterialTheme.typography.bodyMedium,
             color = Color.Gray
         )
@@ -234,16 +296,16 @@ private fun SetCredentialsForm(
         label = { Text("Nueva contraseña") },
         singleLine = true,
         visualTransformation = PasswordVisualTransformation(),
-        isError = attemptedSubmit && !passwordValid,
+        isError = attemptedSubmit && pwdError != null,
         supportingText = {
-            if (attemptedSubmit && !passwordValid) {
-                Text("Mínimo $minPasswordLength caracteres")
-            }
+            if (attemptedSubmit && pwdError != null) Text(pwdError)
         },
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        colors = loginFieldColors()
+        colors = accountFieldColors()
     )
+
+    PasswordRequirements(password)
 
     Spacer(modifier = Modifier.height(16.dp))
 
@@ -255,13 +317,11 @@ private fun SetCredentialsForm(
         visualTransformation = PasswordVisualTransformation(),
         isError = attemptedSubmit && !passwordsMatch,
         supportingText = {
-            if (attemptedSubmit && !passwordsMatch) {
-                Text("Las contraseñas no coinciden")
-            }
+            if (attemptedSubmit && !passwordsMatch) Text("Las contraseñas no coinciden")
         },
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        colors = loginFieldColors()
+        colors = accountFieldColors()
     )
 
     Spacer(modifier = Modifier.height(32.dp))
@@ -269,7 +329,7 @@ private fun SetCredentialsForm(
     Button(
         onClick = {
             attemptedSubmit = true
-            if (isValid) onSubmit(password)
+            if (pwdError == null && passwordsMatch) onSubmit(password)
         },
         modifier = Modifier.fillMaxWidth().height(56.dp),
         colors = ButtonDefaults.buttonColors(containerColor = PrimaryNeon, contentColor = Color.Black),

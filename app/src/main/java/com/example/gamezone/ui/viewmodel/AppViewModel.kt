@@ -54,10 +54,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val renewalDateMillis: StateFlow<Long> = userPreferences.renewalDateMillis
         .stateIn(viewModelScope, SharingStarted.Eagerly, 0L)
 
-    // Indica si la cuenta local ya tiene una contrasena configurada (falso para
-    // cuentas creadas antes del sistema de credenciales, hasta que la configuren).
-    val hasCredentials: StateFlow<Boolean> = userPreferences.hasCredentials
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    // Nombres de todas las cuentas locales del dispositivo (para impedir
+    // nombres de usuario duplicados al crear una cuenta).
+    val registeredUsernames: StateFlow<Set<String>> = userPreferences.registeredUsernames
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
     // Acceso real a los beneficios Premium: exige sesion iniciada ADEMAS de tener
     // la suscripcion activa. Un invitado nunca debe ver Retro ni el estado de
@@ -103,9 +103,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // Crea una cuenta local nueva (usuario + contrasena + avatar) e inicia sesion.
-    fun createAccount(name: String, avatar: Int, password: String) {
+    // onResult(false) si el nombre de usuario ya estaba en uso.
+    fun createAccount(name: String, avatar: Int, password: String, onResult: (Boolean) -> Unit) {
         viewModelScope.launch {
-            userPreferences.createAccount(name, avatar, password)
+            onResult(userPreferences.createAccount(name, avatar, password))
         }
     }
 
@@ -118,9 +119,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // Migracion: establece por primera vez la contrasena de una cuenta creada
     // antes del sistema de credenciales, sin perder biblioteca/valoraciones/Premium.
-    fun setCredentials(password: String) {
+    fun setCredentials(username: String, password: String, onResult: (Boolean) -> Unit) {
         viewModelScope.launch {
-            userPreferences.setCredentials(password)
+            onResult(userPreferences.setCredentials(username, password))
         }
     }
 
@@ -135,10 +136,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     // Intenta iniciar sesion con usuario y contrasena. NO recupera la sesion
     // automaticamente por el simple hecho de que exista una cuenta local: solo
     // si las credenciales introducidas son correctas.
-    fun login(username: String, password: String, onResult: (Boolean) -> Unit) {
+    fun login(username: String, password: String, onResult: (LoginResult) -> Unit) {
         viewModelScope.launch {
-            val result = userPreferences.attemptLogin(username, password)
-            onResult(result == LoginResult.SUCCESS)
+            onResult(userPreferences.attemptLogin(username, password))
         }
     }
 

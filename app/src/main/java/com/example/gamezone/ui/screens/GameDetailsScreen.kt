@@ -44,7 +44,6 @@ fun GameDetailsScreen(
     val game = MockDataProvider.games.find { it.id == gameId }
     val libraryIds by viewModel.libraryGameIds.collectAsState()
     val isLoggedIn by viewModel.isLoggedIn.collectAsState()
-    val hasProfile by viewModel.hasProfile.collectAsState()
     val userRatings by viewModel.userRatings.collectAsState()
     val hasActivePremiumAccess by viewModel.hasActivePremiumAccess.collectAsState()
 
@@ -233,24 +232,35 @@ fun GameDetailsScreen(
     if (showGuestDialog) {
         AlertDialog(
             onDismissRequest = { showGuestDialog = false },
-            title = { Text(if (hasProfile) "Inicia sesión para continuar" else "Personaliza tu GameZone") },
+            title = { Text("Inicia sesión para continuar") },
             text = {
-                Text(
-                    if (hasProfile) "Ya tienes una cuenta local en este dispositivo. Inicia sesión para guardar juegos en tu biblioteca y valorarlos."
-                    else "Crea un perfil para guardar juegos en tu biblioteca, valorarlos y conservar tus preferencias."
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showGuestDialog = false
-                        if (hasProfile) onLoginClick() else onCreateProfileClick()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryNeon, contentColor = Color.Black)
-                ) {
-                    Text(if (hasProfile) "Iniciar sesión" else "Crear perfil")
+                Column {
+                    Text("Inicia sesión o crea una cuenta local para guardar juegos en tu biblioteca y valorarlos.")
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Button(
+                        onClick = {
+                            showGuestDialog = false
+                            onLoginClick()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryNeon, contentColor = Color.Black)
+                    ) {
+                        Text("Iniciar sesión")
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedButton(
+                        onClick = {
+                            showGuestDialog = false
+                            onCreateProfileClick()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                    ) {
+                        Text("Crear cuenta")
+                    }
                 }
             },
+            confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { showGuestDialog = false }) {
                     Text("Ahora no", color = Color.Gray)

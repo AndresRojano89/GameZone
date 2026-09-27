@@ -252,7 +252,7 @@ fun ProfileHeader(
                     onClick = if (hasProfile) onLoginClick else onActionClick
                 ) {
                     Text(
-                        text = if (hasProfile) "Cuenta guardada • Iniciar sesión" else "Invitado • Crear Perfil",
+                        text = if (hasProfile) "Invitado • Iniciar sesión" else "Invitado • Crear cuenta",
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = PrimaryNeon
@@ -460,7 +460,7 @@ fun ProfileSettingsSection(
             value = when {
                 isLoggedIn -> "Gestionar"
                 hasProfile -> "Iniciar sesión"
-                else -> "Crear perfil"
+                else -> "Crear cuenta"
             },
             onClick = onAccountClick
         )
@@ -586,13 +586,10 @@ fun AccountDialog(
                             Text("Cerrar Sesión")
                         }
                     }
-                    hasProfile -> {
-                        Text(
-                            text = "Encontramos una cuenta local guardada en este dispositivo (\"$username\"). Puedes volver a entrar sin perder tu biblioteca ni tus valoraciones.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.Gray
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
+                    else -> {
+                        // Visitante: nunca se sugiere ni se recupera ninguna
+                        // cuenta guardada; se ofrecen las dos vias normales y
+                        // el login siempre exige usuario + contrasena.
                         Button(
                             onClick = onLogin,
                             modifier = Modifier.fillMaxWidth(),
@@ -602,14 +599,13 @@ fun AccountDialog(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Iniciar Sesión")
                         }
-                    }
-                    else -> {
-                        Button(
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedButton(
                             onClick = onEdit,
                             modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryNeon, contentColor = Color.Black)
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
                         ) {
-                            Text("Crear Perfil Ahora")
+                            Text("Crear cuenta")
                         }
                     }
                 }
